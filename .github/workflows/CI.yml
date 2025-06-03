@@ -17,10 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create packages directory
-        run: |
-          mkdir build\packages
-
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
         with:
@@ -37,6 +33,7 @@ jobs:
         shell: cmd
         run: |
           cd /d %GITHUB_WORKSPACE%
+          if exist vcpkg rmdir /s /q vcpkg
           git clone https://github.com/Microsoft/vcpkg.git 
           cd vcpkg
           .\bootstrap-vcpkg.bat
@@ -47,6 +44,7 @@ jobs:
         shell: cmd
         run: |
           cd /d %GITHUB_WORKSPACE%
+          if exist build rmdir /s /q build
           mkdir build
           cd build
           cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
