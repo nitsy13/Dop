@@ -1,0 +1,109 @@
+name: CI for Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare environment
+        run: |
+          mkdir build\packages
+          if not exist License.rtf (
+            echo {\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1049{\fonttbl{\f0\fnil\fcharset0 Calibri;}}\viewkind4\uc1\pard\f0\fs22 MIT License\par } > License.rtf
+          )
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '17.0'
+
+      - name: Install WiX Toolset
+        run: |
+          choco install wixtoolset --yes
+          echo WiX installed successfully
+          where.exe candle || echo candle not found
+          where.exe light || echo light not found
+
+      - name: Download and install SFML for Windows
+        run: |
+          curl -L -o sfml.zip https://www.sfml-dev.org/files/SFML-2.5.1-windows-vc15-64-bit.zip 
+          Expand-Archive -Path sfml.zip -DestinationPath "C:\SFML"
+          echo SFML installed to C:\SFML
+
+      - name: Install CMake if missing
+        run: |
+          choco install cmake --yes
+
+      - name: Configure project with CMake
+        shell: cmd
+        run: |
+          cd build
+          cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DSFML_DIR=C:/SFML/SFML-2.5.1
+
+      - name: Build project
+        shell: cmd
+        run: |
+          cd build
+          cmake --build . --config Release --parallel 4
+
+      - name: Create MSI installer package
+        shell: cmd
+        run: |
+          cd build
+          cpack -G WIX --verbose
+          copy *.msi packages\
+
+      - name: Generate source code archives
+        run: |
+          git archive --format=zip -o build/packages/source-code.zip HEAD
+          git archive --format=tar.gz -o build/packages/source-code.tar.gz HEAD
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-windows
+          path: build/packages/
+          retention-days: 1
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Copy all files into one folder
+        run: |
+          mkdir -p combined-packages
+          find artifacts -type f -exec cp {} combined-packages/ \;
+          ls -la combined-packages/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            Windows release includes:
+            - Installer (.msi)
+            - Source code archives
+          draft: false
+          prerelease: false
+          files: |
+            combined-packages/*
+          token: ${{ secrets.GITHUB_TOKEN }}
+          update: true
