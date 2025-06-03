@@ -1,6 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
 project(DoodleJump)
 
-find_package(SFML REQUIRED network audio graphics window system)
+find_package(SFML REQUIRED COMPONENTS network audio graphics window system)
 
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/images" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/")
 
