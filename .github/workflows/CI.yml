@@ -1,4 +1,4 @@
-name: Windows CI Build
+name: Windows MSI Build
 
 on:
   push:
@@ -14,95 +14,75 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: '17.0'
+    - name: Setup environment
+      shell: bash
+      run: |
+        mkdir -p build/packages
+        if [ ! -f License.rtf ]; then
+          echo "{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1049{\fonttbl{\f0\fnil\fcharset0 Calibri;}}\viewkind4\uc1\pard\f0\fs22 MIT License\par }" > License.rtf
+        fi
 
-      - name: Install WiX Toolset
-        run: |
-          choco install wixtoolset --yes
-          echo WiX installed successfully
-          where.exe candle || echo candle not found
-          where.exe light || echo light not found
+    - name: Install MSBuild
+      uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: '17.0'
 
-      - name: Install vcpkg and SFML
-        shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%
-          if exist vcpkg rmdir /s /q vcpkg
-          git clone https://github.com/Microsoft/vcpkg.git 
-          cd vcpkg
-          .\bootstrap-vcpkg.bat
-          .\vcpkg install sfml:x64-windows
-          .\vcpkg integrate install --user-wide
+    - name: Install WiX Toolset
+      run: |
+        choco install wixtoolset --yes
+        echo "WiX installed successfully"
+        where candle || echo "candle not found"
+        where light || echo "light not found"
 
-      - name: Configure project with CMake
-        shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%
-          if exist build rmdir /s /q build
-          mkdir build
-          cd build
-          cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release ^
-            -DCMAKE_TOOLCHAIN_FILE=%GITHUB_WORKSPACE%\vcpkg\scripts\buildsystems\vcpkg.cmake
+    - name: Install SFML dependencies
+      run: |
+        choco install sfml --yes
 
-      - name: Build project
-        shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%\build
-          cmake --build . --config Release --parallel 4
+    - name: Configure project
+      shell: bash
+      run: |
+        cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build MSI package
-        shell: cmd
-        run: |
-          cd /d %GITHUB_WORKSPACE%\build
-          cpack -G WIX --verbose
-          copy *.msi packages\
+    - name: Build project
+      shell: bash
+      run: |
+        cmake --build build --config Release --parallel 4
 
-      - name: Generate source archives
-        shell: bash
-        run: |
-          git archive --format=zip -o build/packages/source-code.zip HEAD
-          git archive --format=tar.gz -o build/packages/source-code.tar.gz HEAD
+    - name: Generate MSI package
+      shell: bash
+      run: |
+        cd build
+        cpack -G "WIX" --verbose
+        find . -name "*.msi" -exec cp {} packages/ \;
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-windows
-          path: build/packages/
-          retention-days: 1
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-msi-package
+        path: build/packages/
+        retention-days: 1
 
   create-release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
 
-      - name: Combine artifacts
-        run: |
-          mkdir -p combined-packages
-          find artifacts -type f -exec cp {} combined-packages/ \;
-          ls -la combined-packages/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body: |
-            Windows release includes:
-            - Installer (.msi)
-            - Source code
-          draft: false
-          prerelease: false
-          files: |
-            combined-packages/*
-          token: ${{ secrets.GITHUB_TOKEN }}
-          update: true
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: |
+          Windows release includes:
+          - MSI installer package
+        draft: false
+        prerelease: false
+        files: |
+          artifacts/windows-msi-package/*.msi
+        token: ${{ secrets.GITHUB_TOKEN }}
