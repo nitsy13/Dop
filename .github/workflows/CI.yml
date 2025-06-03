@@ -36,14 +36,18 @@ jobs:
         where candle || echo "candle not found"
         where light || echo "light not found"
 
-    - name: Install SFML dependencies
+    - name: Download and extract SFML
+      shell: bash
       run: |
-        choco install sfml --yes
+        # Скачиваем SFML 2.6.1 для Windows (64-bit, VC++ 17 - 2022)
+        curl -L -o sfml.zip https://www.sfml-dev.org/files/SFML-2.6.1-windows-vc17-64-bit.zip
+        7z x sfml.zip -o"C:/sfml"
+        echo "SFML_DIR=C:/sfml/SFML-2.6.1" >> $GITHUB_ENV
 
     - name: Configure project
       shell: bash
       run: |
-        cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+        cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DSFML_DIR="${{ env.SFML_DIR }}"
 
     - name: Build project
       shell: bash
