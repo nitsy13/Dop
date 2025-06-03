@@ -18,10 +18,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Prepare environment
+        shell: cmd
         run: |
           mkdir build\packages
           if not exist License.rtf (
-            echo {\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1049{\fonttbl{\f0\fnil\fcharset0 Calibri;}}\viewkind4\uc1\pard\f0\fs22 MIT License\par } > License.rtf
+          echo {\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1049{\fonttbl{\f0\fnil\fcharset0 Calibri;}}\viewkind4\uc1\pard\f0\fs22 MIT License\par } > License.rtf
           )
 
       - name: Setup MSBuild
