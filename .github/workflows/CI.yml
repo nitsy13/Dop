@@ -51,69 +51,14 @@ jobs:
       run: |
         cmake --build build --config Release --parallel 4
 
-    - name: Prepare installation files
-      shell: bash
-      run: |
-        mkdir -p build/install
-        # Копируем исполняемый файл
-        cp build/Release/doodle_jump.exe build/install/
-        # Копируем ресурсы
-        cp -r images build/install/
-        # Копируем необходимые DLL из SFML
-        cp "C:/sfml/SFML-2.6.1/bin/"*.dll build/install/
-
-    - name: Generate WXS file manually
+    - name: Generate MSI package
       shell: bash
       run: |
         cd build
-        cat > install.wxs << 'EOF'
-        <?xml version="1.0" encoding="UTF-8"?>
-        <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-          <Product Id="*" Name="DoodleJump" Language="1033" Version="1.0.0" Manufacturer="YourCompany" UpgradeCode="$(powershell -command "[guid]::NewGuid().ToString()")">
-            <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine"/>
-            <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
-            <MediaTemplate />
-            
-            <Directory Id="TARGETDIR" Name="SourceDir">
-              <Directory Id="ProgramFilesFolder">
-                <Directory Id="INSTALLFOLDER" Name="DoodleJump" />
-              </Directory>
-            </Directory>
-            
-            <DirectoryRef Id="INSTALLFOLDER">
-              <Component Id="MainExecutable" Guid="$(powershell -command "[guid]::NewGuid().ToString()")">
-                <File Id="doodle_jump.exe" Source="install/doodle_jump.exe" KeyPath="yes" Checksum="yes"/>
-              </Component>
-              <Component Id="Images" Guid="$(powershell -command "[guid]::NewGuid().ToString()")">
-                <CreateFolder />
-                <File Id="background.png" Source="install/images/background.png"/>
-                <File Id="doodle.png" Source="install/images/doodle.png"/>
-                <File Id="platform.png" Source="install/images/platform.png"/>
-              </Component>
-              <Component Id="DLLs" Guid="$(powershell -command "[guid]::NewGuid().ToString()")">
-                <File Id="sfml_graphics.dll" Source="install/sfml-graphics-2.dll"/>
-                <File Id="sfml_window.dll" Source="install/sfml-window-2.dll"/>
-                <File Id="sfml_system.dll" Source="install/sfml-system-2.dll"/>
-                <File Id="sfml_audio.dll" Source="install/sfml-audio-2.dll"/>
-                <File Id="sfml_network.dll" Source="install/sfml-network-2.dll"/>
-              </Component>
-            </DirectoryRef>
-            
-            <Feature Id="MainFeature" Title="Main" Level="1">
-              <ComponentRef Id="MainExecutable" />
-              <ComponentRef Id="Images" />
-              <ComponentRef Id="DLLs" />
-            </Feature>
-          </Product>
-        </Wix>
-        EOF
-
-    - name: Compile WXS to MSI
-      shell: bash
-      run: |
-        cd build
-        candle.exe -nologo install.wxs -out install.wixobj
-        light.exe -nologo install.wixobj -out packages/DoodleJump-1.0.0.msi -ext WixUIExtension
+        WIX_GUID=$(powershell -command "[guid]::NewGuid().ToString()")
+        cmake -DCPACK_WIX_PRODUCT_GUID="$WIX_GUID" -DCPACK_WIX_UPGRADE_GUID="$WIX_GUID" ..
+        cpack -G WIX --verbose
+        find . -name "*.msi" -exec cp {} packages/ \;
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
