@@ -33,8 +33,6 @@ jobs:
       run: |
         choco install wixtoolset --yes
         echo "WiX installed successfully"
-        where candle || echo "candle not found"
-        where light || echo "light not found"
 
     - name: Download and extract SFML
       shell: bash
@@ -53,6 +51,14 @@ jobs:
       run: |
         cmake --build build --config Release --parallel 4
 
+    - name: Install files to package directory
+      shell: bash
+      run: |
+        mkdir -p build/install
+        cp build/Release/doodle_jump.exe build/install/
+        cp -r images build/install/
+        cp "C:/sfml/SFML-2.6.1/bin/"*.dll build/install/
+
     - name: Generate MSI package
       shell: bash
       run: |
@@ -63,7 +69,10 @@ jobs:
           -D CPACK_PACKAGE_VERSION="1.0.0" \
           -D CPACK_WIX_PRODUCT_GUID="$(powershell -command "[guid]::NewGuid().ToString()")" \
           -D CPACK_WIX_UPGRADE_GUID="$(powershell -command "[guid]::NewGuid().ToString()")" \
-          -D CPACK_PACKAGE_INSTALL_DIRECTORY="DoodleJump"
+          -D CPACK_PACKAGE_INSTALL_DIRECTORY="DoodleJump" \
+          -D CPACK_INSTALL_CMAKE_PROJECTS="$(pwd);DoodleJump;ALL;/" \
+          -D CPACK_INSTALL_COMMANDS="echo 'Using pre-installed files'" \
+          -D CPACK_INSTALLED_DIRECTORIES="install;DoodleJump"
         
         find . -name "*.msi" -exec cp {} packages/ \;
 
